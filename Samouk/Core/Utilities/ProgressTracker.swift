@@ -1,6 +1,7 @@
 import Foundation
 
-struct LetterProgress: Codable {
+struct LetterProgress: Codable, Identifiable {
+    let id: UUID
     var letter: String
     var attempts: Int
     var successfulAttempts: Int
@@ -8,6 +9,31 @@ struct LetterProgress: Codable {
     
     var successRate: Double {
         return attempts > 0 ? Double(successfulAttempts) / Double(attempts) : 0
+    }
+    
+    init(letter: String, attempts: Int, successfulAttempts: Int, lastAttemptDate: Date) {
+        self.id = UUID()
+        self.letter = letter
+        self.attempts = attempts
+        self.successfulAttempts = successfulAttempts
+        self.lastAttemptDate = lastAttemptDate
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case letter
+        case attempts
+        case successfulAttempts
+        case lastAttemptDate
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        letter = try container.decode(String.self, forKey: .letter)
+        attempts = try container.decode(Int.self, forKey: .attempts)
+        successfulAttempts = try container.decode(Int.self, forKey: .successfulAttempts)
+        lastAttemptDate = try container.decode(Date.self, forKey: .lastAttemptDate)
     }
 }
 

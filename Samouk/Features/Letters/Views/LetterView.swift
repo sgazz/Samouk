@@ -6,12 +6,14 @@ struct LetterView: View {
     @State private var currentLetter: String
     @State private var showingAnimation = false
     @State private var isChecking = false
+    @State private var recognitionResult: RecognitionResult?
     
     @AppStorage("penColor") private var penColorString = "black"
     @AppStorage("penWidth") private var penWidth = 5.0
     @AppStorage("showGuideLines") private var showGuideLines = true
     
     private let handwritingService = HandwritingRecognitionService.shared
+    private let sampleService = HandwritingSampleService.shared
     private let progressTracker = ProgressTracker.shared
     private let audioManager = AudioManager.shared
     
@@ -65,9 +67,19 @@ struct LetterView: View {
             .frame(height: UIScreen.main.bounds.width)
             .padding()
             
+            // Povratne informacije o prepoznavanju
+            RecognitionFeedbackView(
+                isRecognizing: isChecking,
+                confidence: recognitionResult?.confidence,
+                recognizedText: recognitionResult?.text,
+                expectedLetter: currentLetter
+            )
+            .padding(.horizontal)
+            
             HStack(spacing: 30) {
                 Button(action: {
                     canvasView.drawing = PKDrawing()
+                    recognitionResult = nil
                 }) {
                     VStack {
                         Image(systemName: "trash")
@@ -116,10 +128,20 @@ struct LetterView: View {
     
     private func checkDrawing() {
         isChecking = true
+        recognitionResult = nil
         
-        handwritingService.recognizeHandwriting(from: canvasView.drawing) { recognizedText in
-            if let text = recognizedText {
-                let isCorrect = handwritingService.validateDrawing(text, against: currentLetter)
+        handwritingService.recognizeHandwriting(from: canvasView.drawing, for: currentLetter) { result in
+            if let result = result {
+                recognitionResult = result
+                let isCorrect = handwritingService.validateDrawing(result.text, against: currentLetter)
+                
+                // Čuvamo primer rukopisa
+                sampleService.saveSample(
+                    letter: currentLetter,
+                    drawing: canvasView.drawing,
+                    confidence: result.confidence,
+                    wasSuccessful: isCorrect
+                )
                 
                 audioManager.playSound(isCorrect ? .correct : .incorrect)
                 progressTracker.recordAttempt(for: currentLetter, wasSuccessful: isCorrect)
@@ -129,6 +151,7 @@ struct LetterView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                         currentLetter = progressTracker.getNextRecommendedLetter()
                         canvasView.drawing = PKDrawing()
+                        recognitionResult = nil
                     }
                 }
             }
